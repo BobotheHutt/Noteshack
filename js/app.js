@@ -23,7 +23,7 @@
   NpI18n.dom(document.body);
 
   // Shown in Tools → About, so it is easy to tell which version is running.
-  const APP_VERSION = '2026.11.11-55';
+  const APP_VERSION = '2026.11.11-56';
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -118,7 +118,7 @@
 
   const SETTINGS_KEY = 'np.settings';
   const settings = Object.assign({
-    theme: 'system', view: 'page', zoom: 1, sidebar: true, spellcheck: true, smartMd: true,
+    theme: 'system', view: 'page', zoom: 1, sidebar: true, spellcheck: true, smartMd: true, marks: false,
     voice: '', rate: 1, lastDoc: null, defaults: Object.assign({}, DOC_DEFAULTS)
   }, (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); } catch (e) { return {}; } })());
 
@@ -1708,7 +1708,7 @@
       'view:page': settings.view === 'page', 'view:full': settings.view === 'full',
       'theme:light': settings.theme === 'light', 'theme:dark': settings.theme === 'dark', 'theme:system': settings.theme === 'system',
       sidebar: document.body.classList.contains('sidebar-open'),
-      spellcheck: settings.spellcheck, smartMd: settings.smartMd
+      spellcheck: settings.spellcheck, smartMd: settings.smartMd, marks: settings.marks
     };
     for (const b of $$('[data-check]')) {
       const on = !!state[b.dataset.check];
@@ -1886,6 +1886,7 @@
     goal: goalDialog,
     speak: toggleSpeak,
     voice: voiceDialog,
+    marks: () => { settings.marks = !settings.marks; saveSettings(); applyMarks(); toast(settings.marks ? _('Formatting marks on') : _('Formatting marks off')); },
     spellcheck: () => { settings.spellcheck = !settings.spellcheck; saveSettings(); applySpellcheck(); toast(settings.spellcheck ? _('Spell check on') : _('Spell check off')); },
     'smart-md': () => { settings.smartMd = !settings.smartMd; saveSettings(); toast(settings.smartMd ? _('Markdown shortcuts on') : _('Markdown shortcuts off')); },
 
@@ -3590,6 +3591,9 @@
     tbSize.value = String(s.size);
   }
 
+  // View → Formatting marks: a ¶ where each paragraph ends (styles.css)
+  function applyMarks() { document.body.classList.toggle('show-marks', !!settings.marks); }
+
   function applySpellcheck() {
     editor.spellcheck = settings.spellcheck && !spellOurs();
     spellPass();
@@ -3645,6 +3649,7 @@
     setView(settings.view);
     setZoom(settings.zoom);
     applySpellcheck();
+    applyMarks();
     setSidebar(settings.sidebar && !matchMedia('(max-width: 899px)').matches, true);
 
     const ok = await NpStore.open();

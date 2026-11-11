@@ -648,5 +648,8 @@ NpI18n.add({
   "Check for updates": "Rechercher des mises à jour",
   "Checking…": "Vérification…",
   "Could not check. Are you online?": "Impossible de vérifier. Êtes-vous en ligne ?",
-  "You have the newest version.": "Vous avez la version la plus récente."
+  "You have the newest version.": "Vous avez la version la plus récente.",
+  "Formatting marks": "Marques de mise en forme",
+  "Formatting marks on": "Marques de mise en forme affichées",
+  "Formatting marks off": "Marques de mise en forme masquées"
 });

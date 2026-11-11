@@ -36,6 +36,33 @@ test('Backspace or Ctrl+Z right after a Markdown shortcut puts back what was typ
   await expect(ed.locator('p').last()).toHaveText('#');
 });
 
+test('View → Formatting marks shows a ¶ where paragraphs end, on screen only', async ({ app: p }) => {
+  await p.click('#editor');
+  await p.keyboard.type('# Title'); await p.keyboard.press('Enter');
+  await p.keyboard.type('Text.'); await p.keyboard.press('Enter'); await p.keyboard.press('Enter');
+  await p.keyboard.type('- item');
+  const mark = (sel, where) => p.evaluate(([sel, where]) => getComputedStyle(document.querySelector('#editor ' + sel), where).content, [sel, where]);
+  const toggle = async () => {
+    await p.locator('.menu', { has: p.locator('[data-action="marks"]') }).locator('.menu-btn').click();
+    await p.click('.menu.open [data-action="marks"]');
+  };
+  expect(await mark('p', '::after')).toBe('none');
+  const height = await p.locator('#editor').evaluate((e) => e.offsetHeight);
+  await toggle();
+  for (const sel of ['h1', 'p', 'li']) expect(await mark(sel, '::after'), sel).toBe('"¶"');
+  // an empty line shows it on that line, without making the page taller
+  expect(await mark('p:has(> br:only-child)', '::before')).toBe('"¶"');
+  expect(await mark('p:has(> br:only-child)', '::after')).toBe('none');
+  expect(await p.locator('#editor').evaluate((e) => e.offsetHeight)).toBe(height);
+  // not in the text, and not printed
+  expect(await p.locator('#editor').evaluate((e) => e.textContent)).not.toContain('¶');
+  await p.emulateMedia({ media: 'print' });
+  expect(await mark('p', '::after')).toBe('none');
+  await p.emulateMedia({ media: 'screen' });
+  await toggle();
+  expect(await mark('p', '::after')).toBe('none');
+});
+
 test('writing with Markdown shortcuts, tables and undo', async ({ app: p }) => {
   await p.click('#editor');
   await p.keyboard.type('# My Heading'); await p.keyboard.press('Enter');

@@ -648,5 +648,8 @@ NpI18n.add({
   "Check for updates": "Nach Updates suchen",
   "Checking…": "Wird geprüft…",
   "Could not check. Are you online?": "Prüfen nicht möglich. Sind Sie online?",
-  "You have the newest version.": "Sie haben die neueste Version."
+  "You have the newest version.": "Sie haben die neueste Version.",
+  "Formatting marks": "Formatierungszeichen",
+  "Formatting marks on": "Formatierungszeichen ein",
+  "Formatting marks off": "Formatierungszeichen aus"
 });
