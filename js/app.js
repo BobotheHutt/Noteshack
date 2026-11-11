@@ -23,7 +23,7 @@
   NpI18n.dom(document.body);
 
   // Shown in Tools → About, so it is easy to tell which version is running.
-  const APP_VERSION = '2026.10.29-54';
+  const APP_VERSION = '2026.11.11-55';
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -1121,6 +1121,7 @@
 
   editor.addEventListener('input', (e) => {
     if (e.isComposing) return;
+    shortcutJustRan = false;
     editor.classList.toggle('is-empty', isEmptyDoc());
     if (settings.smartMd && e.inputType === 'insertText' && e.data === ' ') markdownShortcut();
     if (pendingFontSize) applyPendingFontSize();
@@ -1157,7 +1158,30 @@
     else if (tok[0] === '[') blockToList('checklist', /x/i.test(tok));
     else blockToList('ul');
     fixListInParagraph();
+    shortcutJustRan = true;
   }
+
+  // Right after a shortcut changes a line, Backspace or Ctrl+Z puts back
+  // exactly what was typed, and leaves it: the shortcut's two edits (the
+  // characters removed, the line changed) are undone. Anything else typed or
+  // clicked keeps the change.
+  let shortcutJustRan = false;
+  function undoShortcut(e) {
+    const ran = shortcutJustRan;
+    if (/^(Control|Meta|Shift|Alt)$/.test(e.key)) return false;
+    shortcutJustRan = false;
+    const back = e.key === 'Backspace' && !mod(e) && !e.altKey && !e.shiftKey;
+    const undo = mod(e) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'z';
+    if (!ran || !(back || undo)) return false;
+    e.preventDefault();
+    document.execCommand('undo');
+    document.execCommand('undo');
+    const s = getSelection();
+    if (s.rangeCount) s.collapseToEnd();
+    afterEdit();
+    return true;
+  }
+  editor.addEventListener('mousedown', () => { shortcutJustRan = false; });
 
   // Turn the paragraph the caret is in into a new list. Done with insertHTML
   // rather than the list commands, which merge into a list just above.
@@ -1196,6 +1220,7 @@
 
   editor.addEventListener('keydown', (e) => {
     if (e.isComposing) return;
+    if (undoShortcut(e)) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       if (mod(e)) { e.preventDefault(); insertPageBreak(); return; }
       if (handleEnter(e)) return;
@@ -1226,6 +1251,7 @@
         selectNode(block, true);
         document.execCommand('delete');
         insertRule('');
+        shortcutJustRan = true;
         return true;
       }
     }

@@ -1,5 +1,41 @@
 import { test, expect, saveAsType } from './helpers.mjs';
 
+test('Backspace or Ctrl+Z right after a Markdown shortcut puts back what was typed', async ({ app: p }) => {
+  const ed = p.locator('#editor');
+  await p.click('#editor');
+  for (const key of ['Backspace', 'Control+z']) {
+    for (const tok of ['# ', '- ', '1. ', '> ', '[] ', '``` ']) {
+      await p.keyboard.press('Control+a'); await p.keyboard.press('Delete');
+      await p.keyboard.type('Hello'); await p.keyboard.press('Enter');
+      await p.keyboard.type(tok);
+      await expect(ed.locator('h1, ul, ol, blockquote, pre')).toHaveCount(1);
+      await p.keyboard.press(key);
+      // left as typed: going on typing does not change it again
+      await p.keyboard.type('x');
+      await expect(ed.locator('h1, ul, ol, blockquote, pre'), key + ' after ' + tok).toHaveCount(0);
+      await expect(ed.locator('p').last()).toHaveText(tok + 'x');
+    }
+  }
+  // the line rule too
+  await p.keyboard.press('Control+a'); await p.keyboard.press('Delete');
+  await p.keyboard.type('Hi'); await p.keyboard.press('Enter'); await p.keyboard.type('---'); await p.keyboard.press('Enter');
+  await expect(ed.locator('hr')).toHaveCount(1);
+  await p.keyboard.press('Backspace');
+  await expect(ed.locator('hr')).toHaveCount(0);
+  await expect(ed.locator('p').last()).toHaveText('---');
+  // once typing goes on, the change stays and Backspace is ordinary
+  await p.keyboard.press('Control+a'); await p.keyboard.press('Delete');
+  await p.keyboard.type('# Ti'); await p.keyboard.press('Backspace');
+  await expect(ed.locator('h1')).toHaveText('T');
+  // and Ctrl+Z after the restore steps back through the typing as usual
+  await p.keyboard.press('Control+a'); await p.keyboard.press('Delete');
+  await p.keyboard.type('Hello'); await p.keyboard.press('Enter'); await p.keyboard.type('# ');
+  await p.keyboard.press('Control+z');
+  await expect(ed.locator('p').last()).toHaveText('# ');
+  await p.keyboard.press('Control+z');
+  await expect(ed.locator('p').last()).toHaveText('#');
+});
+
 test('writing with Markdown shortcuts, tables and undo', async ({ app: p }) => {
   await p.click('#editor');
   await p.keyboard.type('# My Heading'); await p.keyboard.press('Enter');
