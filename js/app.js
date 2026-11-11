@@ -23,7 +23,7 @@
   NpI18n.dom(document.body);
 
   // Shown in Tools → About, so it is easy to tell which version is running.
-  const APP_VERSION = '2026.11.11-57';
+  const APP_VERSION = '2026.11.11-58';
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -1150,6 +1150,7 @@
     const m = before.match(/^(#{1,3}|[-*+]|1[.)]|>|\[[ xX]?\]|```) $/);
     if (!m) return;
     const tok = m[1];
+    const undoTo = { text: docText(), block, at: before.length };
     s.removeAllRanges();
     s.addRange(pre);
     document.execCommand('delete');
@@ -1160,16 +1161,19 @@
     else if (tok[0] === '[') blockToList('checklist', /x/i.test(tok));
     else blockToList('ul');
     fixListInParagraph();
-    shortcutJustRan = tok;
+    shortcutJustRan = undoTo;
   }
 
   // Right after a shortcut changes a line, Backspace or Ctrl+Z puts back
   // exactly what was typed, and leaves it: the shortcut's edits (the
-  // characters removed, the line changed) are undone, until the line holds
-  // what was typed again (Chrome keeps them as two steps of undo, Firefox
-  // and Safari as one). Anything else typed or clicked keeps the change.
-  // shortcutJustRan: what was typed (e.g. '#'), or false.
+  // characters removed, the line changed) are undone, until the document
+  // reads as it did just before (Chrome keeps them as two steps of undo,
+  // Firefox and Safari as one), and the caret goes back where it was.
+  // Anything else typed or clicked keeps the change.
+  // shortcutJustRan: { text: the document's text then, block: the line,
+  // at: the caret's place in it }, or false.
   let shortcutJustRan = false;
+  const docText = () => editor.textContent.replace(/\u00a0/g, ' ');
   function undoShortcut(e) {
     const ran = shortcutJustRan;
     if (/^(Control|Meta|Shift|Alt)$/.test(e.key)) return false;
@@ -1180,14 +1184,34 @@
     e.preventDefault();
     for (let i = 0; i < 2; i++) {
       document.execCommand('undo');
-      if (blockOf(currentNode()).textContent.replace(/\u00a0/g, ' ').trimStart().startsWith(ran)) break;
+      if (docText() === ran.text) break;
     }
-    const s = getSelection();
-    if (s.rangeCount) s.collapseToEnd();
+    if (!(ran.block.isConnected && caretAtChar(ran.block, ran.at))) {
+      const s = getSelection();
+      if (s.rangeCount) s.collapseToEnd();
+    }
     afterEdit();
     return true;
   }
   editor.addEventListener('mousedown', () => { shortcutJustRan = false; });
+
+  // The caret after the nth character of a block's text; false if it has fewer.
+  function caretAtChar(block, n) {
+    const walk = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+      if (n <= t.data.length) {
+        const r = document.createRange();
+        r.setStart(t, n);
+        r.collapse(true);
+        const s = getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+        return true;
+      }
+      n -= t.data.length;
+    }
+    return false;
+  }
 
   // Turn the paragraph the caret is in into a new list. Done with insertHTML
   // rather than the list commands, which merge into a list just above.
@@ -1254,10 +1278,11 @@
       const t = block.textContent.replace(/ /g, ' ').trim();
       if ((t === '---' || t === '***' || t === '___') && !block.closest('pre,td,th,li')) {
         e.preventDefault();
+        const undoTo = { text: docText(), block, at: block.textContent.length };
         selectNode(block, true);
         document.execCommand('delete');
         insertRule('');
-        shortcutJustRan = t;
+        shortcutJustRan = undoTo;
         return true;
       }
     }
