@@ -533,12 +533,11 @@ body.view-full .editor { min-height: calc(100vh - 160px); padding: 40px 48px 120
 .editor pre code { background: none; padding: 0; }
 /* View → Formatting marks: a ¶ where each paragraph, heading, list item,
    quote and code block ends, on screen only (never printed, copied or
-   saved). An empty line shows it before its line break, so it stays on that
-   line. A list item holding a list, or a quote holding paragraphs, leaves it
-   to them. */
+   saved). The block's last line break, which shows nothing, is hidden
+   (js/app.js marks it) so the ¶ stays on its line. A list item holding a
+   list, or a quote holding paragraphs, leaves it to them. */
 @media screen {
-  body.show-marks .editor :is(p, h1, h2, h3, h4, h5, h6, pre, li:not(:has(> ul, > ol)), blockquote:not(:has(> p, > div, > ul, > ol)))::after,
-  body.show-marks .editor :is(p, h1, h2, h3, h4, h5, h6, pre, blockquote):has(> br:only-child)::before {
+  body.show-marks .editor :is(p, h1, h2, h3, h4, h5, h6, pre, li:not(:has(> ul, > ol)), blockquote:not(:has(> p, > div, > ul, > ol)))::after {
     content: "¶";
     margin-inline-start: 0.15em;
     color: var(--accent);
@@ -549,7 +548,7 @@ body.view-full .editor { min-height: calc(100vh - 160px); padding: 40px 48px 120
     pointer-events: none;
     user-select: none;
   }
-  body.show-marks .editor :is(p, h1, h2, h3, h4, h5, h6, pre, blockquote, li):has(> br:only-child)::after { content: none; }
+  body.show-marks .editor br[data-np-end] { display: none; }
 }
 .editor hr { border: 0; border-top: 1px solid var(--paper-line); margin: 1em 0; }
 .editor hr.page-break {

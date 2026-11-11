@@ -50,10 +50,15 @@ test('View → Formatting marks shows a ¶ where paragraphs end, on screen only'
   const height = await p.locator('#editor').evaluate((e) => e.offsetHeight);
   await toggle();
   for (const sel of ['h1', 'p', 'li']) expect(await mark(sel, '::after'), sel).toBe('"¶"');
-  // an empty line shows it on that line, without making the page taller
-  expect(await mark('p:has(> br:only-child)', '::before')).toBe('"¶"');
-  expect(await mark('p:has(> br:only-child)', '::after')).toBe('none');
+  // an empty line, and a line ending in a break (as Firefox writes them),
+  // keep the ¶ on that line: the page is no taller
+  expect(await mark('p:has(> br:only-child)', '::after')).toBe('"¶"');
   expect(await p.locator('#editor').evaluate((e) => e.offsetHeight)).toBe(height);
+  await p.evaluate(() => { document.querySelector('#editor').innerHTML = '<p>One.<br></p><p>two<br>lines</p><ul><li>item<br></li></ul>'; document.querySelector('#editor').dispatchEvent(new InputEvent('input')); });
+  await expect(p.locator('#editor br[data-np-end]')).toHaveCount(2);
+  expect(await p.locator('#editor p:first-child br').evaluate((b) => getComputedStyle(b).display)).toBe('none');
+  // a break within a paragraph stays
+  expect(await p.locator('#editor p:nth-child(2) br').evaluate((b) => b.hasAttribute('data-np-end'))).toBe(false);
   // not in the text, and not printed
   expect(await p.locator('#editor').evaluate((e) => e.textContent)).not.toContain('¶');
   await p.emulateMedia({ media: 'print' });
@@ -61,6 +66,7 @@ test('View → Formatting marks shows a ¶ where paragraphs end, on screen only'
   await p.emulateMedia({ media: 'screen' });
   await toggle();
   expect(await mark('p', '::after')).toBe('none');
+  await expect(p.locator('#editor br[data-np-end]')).toHaveCount(0);
 });
 
 test('writing with Markdown shortcuts, tables and undo', async ({ app: p }) => {

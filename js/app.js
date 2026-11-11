@@ -23,7 +23,7 @@
   NpI18n.dom(document.body);
 
   // Shown in Tools → About, so it is easy to tell which version is running.
-  const APP_VERSION = '2026.11.11-56';
+  const APP_VERSION = '2026.11.11-57';
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -148,7 +148,7 @@
   }
 
   function serialize() {
-    return editor.innerHTML.replace(/ data-np-t="[^"]*"/g, '');
+    return editor.innerHTML.replace(/ data-np-t="[^"]*"| data-np-end=""/g, '');
   }
 
   // without the marks of a translation still being checked
@@ -685,6 +685,7 @@
     setZoom(settings.zoom);
     editor.innerHTML = NpSanitize.html(doc.html || '');
     if (!editor.firstChild) editor.innerHTML = '<p><br></p>';
+    if (settings.marks) scheduleMarks();
     dirty = false;
     settings.lastDoc = doc.id;
     saveSettings();
@@ -874,6 +875,7 @@
     updateToolbarState();
     if (findState.open) scheduleFind();
     scheduleSpell();
+    if (settings.marks) scheduleMarks();
   }
 
   /* ----- spelling, in the document's language ----- */
@@ -1158,13 +1160,15 @@
     else if (tok[0] === '[') blockToList('checklist', /x/i.test(tok));
     else blockToList('ul');
     fixListInParagraph();
-    shortcutJustRan = true;
+    shortcutJustRan = tok;
   }
 
   // Right after a shortcut changes a line, Backspace or Ctrl+Z puts back
-  // exactly what was typed, and leaves it: the shortcut's two edits (the
-  // characters removed, the line changed) are undone. Anything else typed or
-  // clicked keeps the change.
+  // exactly what was typed, and leaves it: the shortcut's edits (the
+  // characters removed, the line changed) are undone, until the line holds
+  // what was typed again (Chrome keeps them as two steps of undo, Firefox
+  // and Safari as one). Anything else typed or clicked keeps the change.
+  // shortcutJustRan: what was typed (e.g. '#'), or false.
   let shortcutJustRan = false;
   function undoShortcut(e) {
     const ran = shortcutJustRan;
@@ -1174,8 +1178,10 @@
     const undo = mod(e) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'z';
     if (!ran || !(back || undo)) return false;
     e.preventDefault();
-    document.execCommand('undo');
-    document.execCommand('undo');
+    for (let i = 0; i < 2; i++) {
+      document.execCommand('undo');
+      if (blockOf(currentNode()).textContent.replace(/\u00a0/g, ' ').trimStart().startsWith(ran)) break;
+    }
     const s = getSelection();
     if (s.rangeCount) s.collapseToEnd();
     afterEdit();
@@ -1251,7 +1257,7 @@
         selectNode(block, true);
         document.execCommand('delete');
         insertRule('');
-        shortcutJustRan = true;
+        shortcutJustRan = t;
         return true;
       }
     }
@@ -1347,7 +1353,7 @@
       wrap.appendChild(shell);
       n = n.parentNode;
     }
-    return unmarked(wrap.innerHTML.replace(/ data-np-t="[^"]*"/g, ''));
+    return unmarked(wrap.innerHTML.replace(/ data-np-t="[^"]*"| data-np-end=""/g, ''));
   }
 
   function onCopy(e, cut) {
@@ -3591,8 +3597,29 @@
     tbSize.value = String(s.size);
   }
 
-  // View → Formatting marks: a ¶ where each paragraph ends (styles.css)
-  function applyMarks() { document.body.classList.toggle('show-marks', !!settings.marks); }
+  // View → Formatting marks: a ¶ where each paragraph ends (styles.css).
+  // A block's last line break shows nothing, but a ¶ after it would start a
+  // line of its own; so while the marks show, that break is marked
+  // (data-np-end) for the styles to hide, and the ¶ stays on the line. The
+  // mark never reaches a saved or copied document (serialize).
+  const MARK_SEL = 'p,h1,h2,h3,h4,h5,h6,li,blockquote,pre';
+  function applyMarks() {
+    document.body.classList.toggle('show-marks', !!settings.marks);
+    markEnds();
+  }
+  function markEnds() {
+    for (const br of editor.querySelectorAll('br')) {
+      let next = br.nextSibling;
+      while (next && next.nodeType === 3 && !next.data.trim()) next = next.nextSibling;
+      const end = !!settings.marks && !next && br.parentNode.matches(MARK_SEL);
+      if (end !== br.hasAttribute('data-np-end')) br.toggleAttribute('data-np-end', end);
+    }
+  }
+  let marksFrame = 0;
+  function scheduleMarks() {
+    cancelAnimationFrame(marksFrame);
+    marksFrame = requestAnimationFrame(markEnds);
+  }
 
   function applySpellcheck() {
     editor.spellcheck = settings.spellcheck && !spellOurs();
