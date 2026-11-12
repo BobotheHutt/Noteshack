@@ -16,6 +16,22 @@ test('Backspace or Ctrl+Z right after a Markdown shortcut puts back what was typ
       await expect(ed.locator('p').last()).toHaveText(tok + 'x');
     }
   }
+  // where the browser's undo cannot take the change back on its own (Safari
+  // keeps it in one step with the typing), the line is put back by hand
+  await p.evaluate(() => {
+    window.__exec = document.execCommand.bind(document);
+    document.execCommand = (cmd, ...rest) => (cmd === 'undo' || cmd === 'redo' ? false : window.__exec(cmd, ...rest));
+  });
+  for (const tok of ['# ', '- ', '1. ', '> ', '[] ', '``` ']) {
+    await p.keyboard.press('Control+a'); await p.keyboard.press('Delete'); await p.keyboard.press('Control+Alt+0');
+    await p.keyboard.type('Hello'); await p.keyboard.press('Enter');
+    await p.keyboard.type(tok);
+    await p.keyboard.press('Backspace');
+    await p.keyboard.type('x');
+    await expect(ed.locator('h1, ul, ol, blockquote, pre'), 'by hand after ' + tok).toHaveCount(0);
+    await expect(ed.locator('p').last()).toHaveText(tok + 'x');
+  }
+  await p.evaluate(() => { document.execCommand = window.__exec; });
   // the line rule too
   await p.keyboard.press('Control+a'); await p.keyboard.press('Delete');
   await p.keyboard.type('Hi'); await p.keyboard.press('Enter'); await p.keyboard.type('---'); await p.keyboard.press('Enter');
