@@ -81,6 +81,11 @@ translator, reports) stand it in with `page.route`, and need
    reading a scan in WebKit once found no text.
 3. The app's translations have not been checked by native speakers, and
    none are available.
+4. Safari: Backspace or Ctrl+Z right after a Markdown shortcut does not put
+   back what was typed (its undo keeps the shortcut in one step with the
+   typing, and a hand-made restore failed there three times); the change
+   just stays. Chrome and Firefox put it back. Only Safari itself, not
+   this machine, can test a fix: try one on the work branch first.
 
 ## Keeping this file current
 

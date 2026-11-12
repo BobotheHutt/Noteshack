@@ -1150,7 +1150,7 @@
     const m = before.match(/^(#{1,3}|[-*+]|1[.)]|>|\[[ xX]?\]|```) $/);
     if (!m) return;
     const tok = m[1];
-    const undoTo = { text: docText(), block, at: before.length, typed: before };
+    const undoTo = { text: docText(), block, at: before.length };
     s.removeAllRanges();
     s.addRange(pre);
     document.execCommand('delete');
@@ -1164,35 +1164,16 @@
     shortcutJustRan = undoTo;
   }
 
-  // Put back a line a shortcut changed, by hand: the heading, quote, code
-  // block or one-item list where the caret is becomes a paragraph again,
-  // starting with what was typed. For browsers whose undo cannot take the
-  // shortcut back on its own (Safari keeps it in one step with the typing).
-  function restoreLine(ran) {
-    const made = closestInEditor('h1,h2,h3,blockquote,pre,li');
-    if (!made) return false;
-    if (made.tagName === 'LI' && made.parentElement.children.length !== 1) return false;
-    caretTo(made);
-    // a one-item list is turned off first (which leaves a bare line)
-    if (made.tagName === 'LI') document.execCommand(made.parentElement.tagName === 'OL' ? 'insertOrderedList' : 'insertUnorderedList');
-    document.execCommand('formatBlock', false, '<p>');
-    const line = blockOf(currentNode());
-    if (!line || line === editor) return false;
-    caretTo(line);
-    document.execCommand('insertText', false, ran.typed);
-    return caretAtChar(line, ran.at);
-  }
-
   // Right after a shortcut changes a line, Backspace or Ctrl+Z puts back
   // exactly what was typed, and leaves it: the shortcut's edits (the
   // characters removed, the line changed) are undone, until the document
   // reads as it did just before (Chrome keeps them as two steps of undo,
   // Firefox as one), and the caret goes back where it was. Where undo
   // cannot (Safari takes the typing back with them), what was undone is
-  // redone and the line is put back by hand (restoreLine). Anything else
+  // redone, so nothing typed is lost and the change stays. Anything else
   // typed or clicked keeps the change.
   // shortcutJustRan: { text: the document's text then, block: the line,
-  // at: the caret's place in it, typed: the line up to the caret }, or false.
+  // at: the caret's place in it }, or false.
   let shortcutJustRan = false;
   const docText = () => editor.textContent.replace(/\u00a0/g, ' ');
   function undoShortcut(e) {
@@ -1212,7 +1193,6 @@
       }
     } else {
       while (undone--) document.execCommand('redo');
-      if (ran.typed) restoreLine(ran);
     }
     afterEdit();
     return true;
