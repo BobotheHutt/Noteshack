@@ -36,8 +36,11 @@ privacy promises, the file list and the credits; read the part you need.
    `index.html` (same number; `tests/release.spec.mjs` checks), and
    `APP_VERSION` in `js/app.js` (it ends with the same number: a tab left
    open compares it with `sw.js` every hour to offer Reload). `VENDOR` in `sw.js` too if `vendor/` changed.
-3. Commit and push straight to `main`. No work-branch push first: it only
-   doubles GitHub's test run.
+3. Commit and push straight to `main`. When the change could behave
+   differently in Firefox or Safari (editing, undo, selection, layout), push
+   it to the work branch first and run Tests there (step 5, with the branch
+   as the ref): only Chromium runs here, and every failed run emails the
+   owner. `main` gets it once that run is green.
 4. Check it is live: `https://noteshack.org/sw.js` shows the new `CACHE`.
 5. GitHub runs no tests on a push. When the change touches the browser
    side (not only `worker/` or `tools/`), start Actions → Tests by hand with
