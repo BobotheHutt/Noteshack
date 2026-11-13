@@ -61,6 +61,21 @@ Only Chromium is installed here. Tests that use the online service (the
 translator, reports) stand it in with `page.route`, and need
 `serviceWorkers: 'block'` for WebKit.
 
+## Word files (`js/docx.js`)
+
+The import follows the Word format (ECMA-376): each paragraph's and run's
+formatting is worked out from the document's defaults, its style and the
+styles that style is based on, its list level, its character style and its
+own settings, in that order. Lists are numbered as Word numbers them (per
+list, through empty lines and text between; "(a)", "a)", "1.1.", "Article
+I."), and a document keeps Word's base font, size, line spacing, paper and
+exact margins as its page settings. The export writes the same back.
+**Check a change against LibreOffice**: `node tools/docx-compare.mjs
+file.docx` (with `node tests/server.mjs 8123` running) lists each paragraph's
+number and text position in both; LibreOffice and poppler are on this
+machine. Known: LibreOffice ignores a level's "never restart" (Word follows
+it, and so does Noteshack).
+
 ## Rules of this codebase
 
 - **Every phrase the app shows is in `locales/{es,fr,de,pt,it}.js`**, keyed by

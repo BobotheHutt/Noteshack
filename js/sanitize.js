@@ -57,7 +57,7 @@
     P: [], DIV: [], SPAN: [], BR: [], B: [], STRONG: [], I: [], EM: [], U: [], S: [], STRIKE: [],
     DEL: [], INS: [], SUB: [], SUP: [], MARK: [], CODE: [], PRE: [], BLOCKQUOTE: [], SMALL: [],
     H1: [], H2: [], H3: [], H4: [], H5: [], H6: [],
-    UL: ['class'], OL: ['start', 'type'], LI: ['data-checked'],
+    UL: ['class'], OL: ['start', 'type', 'class'], LI: ['data-checked'],
     A: ['href', 'title'], IMG: ['src', 'alt', 'class'],
     TABLE: [], THEAD: [], TBODY: [], TFOOT: [], TR: [], TH: ['colspan', 'rowspan'], TD: ['colspan', 'rowspan'],
     HR: ['class'], CAPTION: [], FONT: []
@@ -65,12 +65,18 @@
 
   const CLASSES = {
     UL: ['checklist'],
+    // list markers other than "1." (from Word: "1", "1)", "(1)", "1.1.", "1.1")
+    OL: ['np-plain', 'np-rp', 'np-pp', 'np-outline', 'np-outline-bare'],
     IMG: ['img-left', 'img-center', 'img-right'],
     HR: ['page-break']
   };
 
+  // what a document keeps (a Word file's layout among it: indents, spacing,
+  // line spacing, capitals); a page pasted from the web keeps only the text's
   const STYLE_PROPS = ['color', 'background-color', 'font-family', 'font-size', 'font-weight', 'font-style',
-    'text-decoration', 'text-decoration-line', 'text-align', 'vertical-align', 'margin-left'];
+    'text-decoration', 'text-decoration-line', 'text-align', 'vertical-align', 'margin-left',
+    'margin-right', 'margin-top', 'margin-bottom', 'text-indent', 'line-height', 'padding-left', 'text-transform', 'font-variant'];
+  const LAYOUT_PROPS = ['font-family', 'font-size', 'margin-left', 'margin-right', 'margin-top', 'margin-bottom', 'text-indent', 'line-height', 'padding-left'];
   const IMG_STYLE_PROPS = ['width'];
 
   const BLOCK = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE',
@@ -124,7 +130,7 @@
       val = val.trim();
       if (/url\(|expression|javascript:|[<>]/i.test(val)) continue;
       if (external) {
-        if (prop === 'font-family' || prop === 'font-size' || prop === 'margin-left') continue;
+        if (LAYOUT_PROPS.includes(prop)) continue;
         if (prop === 'color' && NpColor.isNeutral(val)) continue;
         if (prop === 'background-color' && NpColor.isNeutral(val)) continue;
         if (prop === 'text-align' && /^(left|start)$/i.test(val)) continue;

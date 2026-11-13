@@ -21,6 +21,7 @@ and lets you edit and sign PDFs.
 - A welcome on opening that sums up what Noteshack does (tick "Don't show this again" to stop it)
 - Autosave plus **version history**: browse earlier versions and restore any of them
 - **Open** `.docx`, `.md`, `.html` and `.txt`, by menu or by dropping files on the window (PDFs and images open in the PDF editor, below)
+  - A Word file keeps its layout: its styles, indents, spacing, line spacing, capitals, margins and list numbers as Word draws them ("1.", "(a)", "a)", "1.1.", "Article I."), counted through empty lines and text between; saving as Word writes them back.
 - **Save** (Ctrl+S) writes over the document's file; the first time, it is Save as. **Save as…** (Ctrl+Shift+S) picks the name, folder and kind: Word (`.docx`), web page, Markdown or plain text. **Export…** makes a PDF (through Print). Everything is also kept in Noteshack as you work ("Saved in Noteshack").
   - In **Chrome and Edge on a computer**, Save as uses the system's own Save dialog (pick the kind of file in its type list), and **Save** (Ctrl+S) then writes straight back to that file, like a desktop program. A file opened through File → Open, or dropped on the window, is saved back to the same way. This lasts while the tab is open: after a reload or a new visit, the first Save shows the dialog again, in the same folder with the same name. Saving over a Word file or web page made elsewhere asks first (once), since Noteshack opens their everyday parts, not all of them.
   - **Firefox, Safari and phones** do not let websites write to a file on disk, so there each save is a new copy in Downloads; Save as asks which kind of file.
@@ -244,7 +245,8 @@ worker/                Noteshack's online service (api.noteshack.org), a Cloudfl
                        reports filed on GitHub; GitHub deploys it when it changes (tools/worker.py)
 vendor/                the libraries (see vendor/README.md), with their licenses; loaded only when needed
 tools/                 the upload scripts for the translation models and the Noto fonts, the online translator's deploy script,
-                       test-setup.py (the tests' fonts and models, where the network cannot reach them); phrases.mjs lists the phrases the code uses
+                       test-setup.py (the tests' fonts and models, where the network cannot reach them); phrases.mjs lists the phrases the code uses;
+                       docx-compare.mjs checks how a Word file is laid out against LibreOffice
 js/icons.js            toolbar icons
 sw.js                  offline support
 manifest.webmanifest   app install details

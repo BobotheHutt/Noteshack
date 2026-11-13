@@ -481,7 +481,8 @@ body.view-full .page {
   line-height: var(--doc-lh);
   white-space: pre-wrap;
   overflow-wrap: break-word;
-  tab-size: 4;
+  /* tab stops every half inch, as in Word */
+  tab-size: 48px;
   caret-color: var(--accent);
 }
 body.view-full .editor { min-height: calc(100vh - 160px); padding: 40px 48px 120px; }
@@ -506,6 +507,42 @@ body.view-full .editor { min-height: calc(100vh - 160px); padding: 40px 48px 120
 .editor a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
 .editor ul, .editor ol { margin: 0.25em 0; padding-inline-start: 1.6em; }
 .editor li { margin: 0.1em 0; }
+
+/* list markers other than "1." (from Word, js/docx.js): "1", "1)", "(1)",
+   in numbers, letters or Roman numerals; and "1.1." / "1.1", every level's
+   number (drawn as "1." where a browser cannot) */
+@counter-style np-plain-decimal { system: extends decimal; suffix: " "; }
+.editor ol.np-plain { list-style-type: np-plain-decimal; }
+@counter-style np-plain-lower-alpha { system: extends lower-alpha; suffix: " "; }
+.editor ol.np-plain[type="a" s] { list-style-type: np-plain-lower-alpha; }
+@counter-style np-plain-upper-alpha { system: extends upper-alpha; suffix: " "; }
+.editor ol.np-plain[type="A" s] { list-style-type: np-plain-upper-alpha; }
+@counter-style np-plain-lower-roman { system: extends lower-roman; suffix: " "; }
+.editor ol.np-plain[type="i" s] { list-style-type: np-plain-lower-roman; }
+@counter-style np-plain-upper-roman { system: extends upper-roman; suffix: " "; }
+.editor ol.np-plain[type="I" s] { list-style-type: np-plain-upper-roman; }
+@counter-style np-rp-decimal { system: extends decimal; suffix: ") "; }
+.editor ol.np-rp { list-style-type: np-rp-decimal; }
+@counter-style np-rp-lower-alpha { system: extends lower-alpha; suffix: ") "; }
+.editor ol.np-rp[type="a" s] { list-style-type: np-rp-lower-alpha; }
+@counter-style np-rp-upper-alpha { system: extends upper-alpha; suffix: ") "; }
+.editor ol.np-rp[type="A" s] { list-style-type: np-rp-upper-alpha; }
+@counter-style np-rp-lower-roman { system: extends lower-roman; suffix: ") "; }
+.editor ol.np-rp[type="i" s] { list-style-type: np-rp-lower-roman; }
+@counter-style np-rp-upper-roman { system: extends upper-roman; suffix: ") "; }
+.editor ol.np-rp[type="I" s] { list-style-type: np-rp-upper-roman; }
+@counter-style np-pp-decimal { system: extends decimal; prefix: "("; suffix: ") "; }
+.editor ol.np-pp { list-style-type: np-pp-decimal; }
+@counter-style np-pp-lower-alpha { system: extends lower-alpha; prefix: "("; suffix: ") "; }
+.editor ol.np-pp[type="a" s] { list-style-type: np-pp-lower-alpha; }
+@counter-style np-pp-upper-alpha { system: extends upper-alpha; prefix: "("; suffix: ") "; }
+.editor ol.np-pp[type="A" s] { list-style-type: np-pp-upper-alpha; }
+@counter-style np-pp-lower-roman { system: extends lower-roman; prefix: "("; suffix: ") "; }
+.editor ol.np-pp[type="i" s] { list-style-type: np-pp-lower-roman; }
+@counter-style np-pp-upper-roman { system: extends upper-roman; prefix: "("; suffix: ") "; }
+.editor ol.np-pp[type="I" s] { list-style-type: np-pp-upper-roman; }
+.editor ol.np-outline > li::marker { content: counters(list-item, ".") ". "; }
+.editor ol.np-outline-bare > li::marker { content: counters(list-item, ".") " "; }
 .editor blockquote {
   margin: 0.6em 0;
   padding: 0.1em 0 0.1em 1em;

@@ -23,7 +23,7 @@
   NpI18n.dom(document.body);
 
   // Shown in Tools → About, so it is easy to tell which version is running.
-  const APP_VERSION = '2026.11.13-60';
+  const APP_VERSION = '2026.11.13-61';
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -90,6 +90,9 @@
     { key: 'mono', label: 'Courier New', css: '"Courier New", Courier, monospace' }
   ];
   const fontByKey = (k) => FONTS.find((f) => f.key === k) || FONTS[0];
+  // a document's margins: a Word file's own (top, right, bottom, left, in
+  // inches), or the preset chosen in Page setup
+  const marginCss = (s) => (Array.isArray(s.marginsIn) && s.marginsIn.length === 4 ? s.marginsIn.map((v) => v + 'in').join(' ') : MARGINS[s.margins].css);
   const firstFamily = (css) => String(css || '').split(',')[0].replace(/["']/g, '').trim().toLowerCase();
 
   const SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 60, 72];
@@ -2190,6 +2193,8 @@
       paper: body.querySelector('input[name=paper]:checked').value,
       margins: body.querySelector('input[name=margins]:checked').value
     };
+    // a Word file's own margins stay unless another preset is chosen
+    if (s.marginsIn && next.margins === s.margins) next.marginsIn = s.marginsIn;
     current.settings = next;
     if (body.querySelector('#ps-default').checked) { settings.defaults = Object.assign({}, next); saveSettings(); }
     applyDocSettings();
@@ -2969,10 +2974,10 @@
     const s = docSettings();
     return [
       'body{margin:0;background:#f3f4f6;color:#1f2328;font-family:' + fontByKey(s.font).css + ';font-size:' + s.size + 'pt;line-height:' + s.lineHeight + '}',
-      'article{box-sizing:border-box;max-width:' + PAPER[s.paper].w + ';margin:24px auto;padding:' + MARGINS[s.margins].css + ';background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1);white-space:pre-wrap;overflow-wrap:break-word}',
+      'article{box-sizing:border-box;max-width:' + PAPER[s.paper].w + ';margin:24px auto;padding:' + marginCss(s) + ';background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1);white-space:pre-wrap;overflow-wrap:break-word}',
       '@media (max-width:700px){article{margin:0;padding:20px}}',
       '@media print{body{background:#fff}article{box-shadow:none;margin:0;padding:0;max-width:none}}',
-      '@page{size:' + PAPER[s.paper].css + ';margin:' + MARGINS[s.margins].css + '}',
+      '@page{size:' + PAPER[s.paper].css + ';margin:' + marginCss(s) + '}',
       'p{margin:0}h1,h2,h3,h4{line-height:1.25;margin:.9em 0 .35em}h1{font-size:2em}h2{font-size:1.5em}h3{font-size:1.25em}',
       'blockquote{margin:.6em 0;padding:.1em 0 .1em 1em;border-left:3px solid #c9ced6;color:#4b5563}',
       'pre{background:#f3f4f6;padding:.8em 1em;border-radius:6px;font-family:"Courier New",monospace;font-size:.9em;white-space:pre-wrap}',
@@ -3062,7 +3067,7 @@
         '</title>\n<style>\n' + exportCss() + '\n</style>\n</head>\n<body>\n<article>' + unmarked(serialize()) + '</article>\n</body>\n</html>\n'], { type: 'text/html;charset=utf-8' }));
     }
     const s = docSettings();
-    return out(await NpDocx.export(editor, { title: name, fontCss: fontByKey(s.font).css, size: s.size, lineHeight: s.lineHeight, page: s.paper, margins: s.margins, lang: docLang(doc) }));
+    return out(await NpDocx.export(editor, { title: name, fontCss: fontByKey(s.font).css, size: s.size, lineHeight: s.lineHeight, page: s.paper, margins: s.margins, marginsIn: s.marginsIn, lang: docLang(doc) }));
   }
 
   // A PDF's words as paragraphs, page by page: [[{ tag, runs: [{ text, bold }] }]].
@@ -3271,7 +3276,12 @@
         if (ext === 'pdf' || file.type === 'application/pdf') doc = await createPdfDoc(file, name);
         else if (NpImages.formatOf(file)) doc = await createPdfDoc(file, name, true);
         if (doc) { await linkFile(doc, handles[i], kind); last = doc; continue; }
-        if (ext === 'docx') html = NpSanitize.html(await NpDocx.import(await file.arrayBuffer()));
+        let opened = {};
+        if (ext === 'docx') {
+          const word = await NpDocx.import(await file.arrayBuffer());
+          html = NpSanitize.html(word.html);
+          opened = { settings: word.settings };
+        }
         else if (ext === 'doc') { toast(_('Old .doc files cannot be opened. In Word, use Save As → .docx first.'), 6000); continue; }
         else if (ext === 'md' || ext === 'markdown' || file.type === 'text/markdown') html = NpSanitize.html(NpMarkdown.toHtml(await file.text()));
         else if (ext === 'html' || ext === 'htm' || file.type === 'text/html') html = NpSanitize.html(await file.text(), { external: true });
@@ -3280,7 +3290,7 @@
           const text = (await file.text()).replace(/\r\n?/g, '\n');
           html = text.split('\n').map((l) => '<p>' + (escapeHtml(l) || '<br>') + '</p>').join('');
         } else { toast(_('“{name}” is not a file type Noteshack can open.', { name: file.name })); continue; }
-        doc = await createDoc(html || '<p><br></p>', name, { keepFocus: true });
+        doc = await createDoc(html || '<p><br></p>', name, Object.assign({ keepFocus: true }, opened));
         if (doc) { await linkFile(doc, handles[i], kind); last = doc; updateSaveUi(); }
       } catch (e) {
         await openFailed(file.name, e);
@@ -3487,8 +3497,8 @@
     if (settings.view === 'page') {
       const s = docSettings();
       const inch = 96;
-      const mar = { narrow: 0.5, normal: 1, wide: 1.5 }[s.margins] * inch;
-      const pageH = (s.paper === 'a4' ? 11.69 : 11) * inch - mar * 2;
+      const m = Array.isArray(s.marginsIn) ? s.marginsIn : Array(4).fill({ narrow: 0.5, normal: 1, wide: 1.5 }[s.margins]);
+      const pageH = ((s.paper === 'a4' ? 11.69 : 11) - m[0] - m[2]) * inch;
       const pages = Math.max(1, Math.ceil((editor.scrollHeight - parseFloat(getComputedStyle(editor).paddingTop) * 2) / pageH));
       $('#sb-pages').textContent = '≈ ' + _n(pages, '{n} page', '{n} pages');
     } else $('#sb-pages').textContent = '';
@@ -3619,8 +3629,8 @@
     st.setProperty('--doc-lh', String(s.lineHeight));
     st.setProperty('--paper-w', PAPER[s.paper].w);
     st.setProperty('--paper-h', PAPER[s.paper].h);
-    st.setProperty('--paper-pad', MARGINS[s.margins].css);
-    $('#page-rule').textContent = '@page { size: ' + PAPER[s.paper].css + '; margin: ' + MARGINS[s.margins].css + '; }';
+    st.setProperty('--paper-pad', marginCss(s));
+    $('#page-rule').textContent = '@page { size: ' + PAPER[s.paper].css + '; margin: ' + marginCss(s) + '; }';
     // until the cursor lands somewhere, the toolbar shows the document's defaults
     tbFont.value = s.font;
     tbSize.value = String(s.size);

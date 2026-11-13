@@ -57,7 +57,7 @@ test('a Word file’s numbered lists keep Word’s numbers, past empty lines and
       item(1, 0, 'Three') + para('Plain text between') + item(1, 1, 'Three a') + item(1, 1, 'Three b');
     const doc = '<w:document xmlns:w="' + w + '"><w:body>' + body + '</w:body></w:document>';
     const blob = NpZip.write([{ name: 'word/document.xml', data: doc }, { name: 'word/numbering.xml', data: numbering }], 'application/zip');
-    return NpDocx.import(await blob.arrayBuffer());
+    return (await NpDocx.import(await blob.arrayBuffer())).html;
   });
   // each item as it shows: its number and letter as the list draws them
   const shown = await p.evaluate((html) => {
@@ -74,5 +74,48 @@ test('a Word file’s numbered lists keep Word’s numbers, past empty lines and
   // no list item stands empty (a "1." with nothing after it)
   expect(html).not.toMatch(/<li>\s*<(ol|ul)/);
   // lettered items after plain text sit at their level's indent
-  expect(html).toContain('<ol type="a" style="margin-left: 48px;"><li>Three a');
+  // lettered items after plain text sit at their level's indent (text at
+  // 1440 twips, 96px, from the page margin; the marker in the half inch before)
+  expect(html).toContain('<ol type="a" style="margin-left: 72px; padding-left: 24px;"><li>Three a');
+});
+
+test('a Word file keeps its layout: styles, indents, spacing, numbers of every kind, margins', async ({ app: p }) => {
+  const word = await p.evaluate(async () => {
+    const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const lvl = (i, fmt, text, left, hang) => '<w:lvl w:ilvl="' + i + '"><w:start w:val="1"/><w:numFmt w:val="' + fmt + '"/><w:lvlText w:val="' + text + '"/><w:pPr><w:ind w:left="' + left + '" w:hanging="' + hang + '"/></w:pPr></w:lvl>';
+    const numbering = '<w:numbering xmlns:w="' + w + '">' +
+      '<w:abstractNum w:abstractNumId="1">' + lvl(0, 'decimal', '%1.', 720, 360) + lvl(1, 'decimal', '%1.%2.', 1440, 720) + '</w:abstractNum>' +
+      '<w:abstractNum w:abstractNumId="2">' + lvl(0, 'lowerLetter', '(%1)', 1080, 360) + '</w:abstractNum>' +
+      '<w:abstractNum w:abstractNumId="3">' + lvl(0, 'upperRoman', 'Article %1.', 1440, 1440) + '</w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="2"/></w:num><w:num w:numId="3"><w:abstractNumId w:val="3"/></w:num></w:numbering>';
+    // Normal: Arial 11pt, 6pt after; a style based on it that is bold and
+    // indented; a character style that is bold too (so bold toggles off)
+    const styles = '<w:styles xmlns:w="' + w + '"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120"/></w:pPr></w:pPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/></w:rPr></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="Clause"><w:name w:val="Clause"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720"/></w:pPr><w:rPr><w:b/></w:rPr></w:style>' +
+      '<w:style w:type="character" w:styleId="Strong2"><w:name w:val="Strong2"/><w:rPr><w:b/></w:rPr></w:style></w:styles>';
+    const item = (num, l, t) => '<w:p><w:pPr><w:numPr><w:ilvl w:val="' + l + '"/><w:numId w:val="' + num + '"/></w:numPr></w:pPr><w:r><w:t>' + t + '</w:t></w:r></w:p>';
+    const body = item(1, 0, 'One') + item(1, 1, 'One one') + item(1, 1, 'One two') +
+      item(2, 0, 'Alpha') + item(2, 0, 'Beta') + item(3, 0, 'Scope') +
+      '<w:p><w:pPr><w:ind w:left="1800" w:hanging="360"/></w:pPr><w:r><w:t xml:space="preserve">b.</w:t></w:r><w:r><w:tab/><w:t>Typed by hand</w:t></w:r></w:p>' +
+      '<w:p><w:pPr><w:ind w:firstLine="720"/><w:spacing w:before="240" w:after="0"/></w:pPr><w:r><w:t>First line in</w:t></w:r></w:p>' +
+      '<w:p><w:pPr><w:pStyle w:val="Clause"/></w:pPr><w:r><w:t xml:space="preserve">Bold </w:t></w:r><w:r><w:rPr><w:rStyle w:val="Strong2"/></w:rPr><w:t>not bold</w:t></w:r><w:r><w:rPr><w:caps/></w:rPr><w:t xml:space="preserve"> caps</w:t></w:r></w:p>';
+    const doc = '<w:document xmlns:w="' + w + '"><w:body>' + body + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="720" w:right="1440" w:bottom="720" w:left="1080"/></w:sectPr></w:body></w:document>';
+    const blob = NpZip.write([{ name: 'word/document.xml', data: doc }, { name: 'word/numbering.xml', data: numbering }, { name: 'word/styles.xml', data: styles }], 'application/zip');
+    return NpDocx.import(await blob.arrayBuffer());
+  });
+  // the page: Normal's font, size and spacing; A4; the file's own margins
+  expect(word.settings).toEqual({ font: 'arial', size: 11, lineHeight: 1.15, paper: 'a4', margins: 'normal', marginsIn: [0.5, 1, 0.5, 0.75] });
+  const html = word.html;
+  // "1.1." numbering, "(a)" and the words Word writes around a number
+  // (its marker under the first level's text, its text an inch in)
+  expect(html).toContain('<ol class="np-outline" style="margin-left: 0px; padding-left: 48px;"><li style="margin-bottom: 6pt;">One one');
+  // another list after it starts on its own, at its own indent
+  expect(html).toContain('</ol></li></ol><ol type="a" class="np-pp" style="margin-left: 48px; padding-left: 24px;">');
+  expect(html).toContain('>Article I.\tScope</p>');
+  // a paragraph indented by hand: its left edge and hanging first line
+  expect(html).toContain('<p style="margin-left: 120px; text-indent: -24px; margin-bottom: 6pt;">b.\tTyped by hand</p>');
+  expect(html).toContain('<p style="text-indent: 48px; margin-top: 12pt;">First line in</p>');
+  // a style's indent and bold; a bold character style over it turns bold off
+  expect(html).toContain('<p style="margin-left: 48px; margin-bottom: 6pt;"><strong>Bold </strong>not bold<strong><span style="text-transform: uppercase"> caps</span></strong></p>');
 });
