@@ -525,17 +525,30 @@
       styleName.set(attr(s, 'styleId'), (attr(n, 'val') || '').toLowerCase());
     }
 
-    // numId → ilvl → 'ul' | 'ol'
+    // numId → ilvl → { kind: 'ul' | 'ol', type: the HTML list type ('1',
+    // 'a', 'A', 'i', 'I'), start, left: the level's indent in twips }
     const numKind = new Map();
+    const TYPES = { lowerLetter: 'a', upperLetter: 'A', lowerRoman: 'i', upperRoman: 'I' };
     if (numbering) {
       const abstract = new Map();
       for (const a of numbering.getElementsByTagNameNS(NS.w, 'abstractNum')) {
         const lv = new Map();
-        for (const l of kids(a, 'lvl')) lv.set(attr(l, 'ilvl'), attr(kid(l, 'numFmt'), 'val') === 'bullet' ? 'ul' : 'ol');
+        for (const l of kids(a, 'lvl')) {
+          const fmt = attr(kid(l, 'numFmt'), 'val');
+          const ind = kid(kid(l, 'pPr'), 'ind');
+          const left = parseInt(attr(ind, 'left') || attr(ind, 'start') || '', 10);
+          lv.set(attr(l, 'ilvl'), { kind: fmt === 'bullet' ? 'ul' : 'ol', type: TYPES[fmt] || '1', start: parseInt(attr(kid(l, 'start'), 'val') || '1', 10), left });
+        }
         abstract.set(attr(a, 'abstractNumId'), lv);
       }
       for (const n of numbering.getElementsByTagNameNS(NS.w, 'num')) {
-        numKind.set(attr(n, 'numId'), abstract.get(attr(kid(n, 'abstractNumId'), 'val')) || new Map());
+        const lv = new Map([...(abstract.get(attr(kid(n, 'abstractNumId'), 'val')) || new Map())].map(([k, v]) => [k, Object.assign({}, v)]));
+        for (const o of kids(n, 'lvlOverride')) {
+          const at = lv.get(attr(o, 'ilvl'));
+          const start = attr(kid(o, 'startOverride'), 'val');
+          if (at && start) at.start = parseInt(start, 10);
+        }
+        numKind.set(attr(n, 'numId'), lv);
       }
     }
 
@@ -638,7 +651,8 @@
       if (numPr && attr(kid(numPr, 'numId'), 'val') !== '0') {
         const numId = attr(kid(numPr, 'numId'), 'val');
         const ilvl = parseInt(attr(kid(numPr, 'ilvl'), 'val') || '0', 10);
-        list = { ilvl, kind: (numKind.get(numId) && numKind.get(numId).get(String(ilvl))) || 'ul' };
+        const lvl = (numKind.get(numId) && numKind.get(numId).get(String(ilvl))) || { kind: 'ul', type: '1', start: 1 };
+        list = { numId, ilvl, kind: lvl.kind, type: lvl.type, start: lvl.start, left: lvl.left };
       }
       const breaks = inner.split('\u0001PAGEBREAK\u0001');
       inner = breaks.join('');
@@ -664,9 +678,30 @@
       return html + '</tbody></table>';
     }
 
+    // Word numbers a list's items wherever they are: empty paragraphs and
+    // other text may come between them, and the count goes on. So each item's
+    // number is worked out as Word would (counts per list and level; a level's
+    // count starts again after an item above it), each list is opened at that
+    // number, and an empty paragraph between items of a list is left out, so
+    // the list goes on. An item with no item above it (after other text) opens
+    // a list of its own, indented to its level.
+    const counts = new Map(); // numId → count at each level
+    function numberOf(list) {
+      if (!counts.has(list.numId)) counts.set(list.numId, []);
+      const at = counts.get(list.numId);
+      at[list.ilvl] = at[list.ilvl] == null ? list.start : at[list.ilvl] + 1;
+      at.length = list.ilvl + 1;
+      return at[list.ilvl];
+    }
+    // a paragraph with nothing in it but spaces and line breaks, styled or not
+    // how far in a list that opens on its own sits: Word's indent for its
+    // level, past the half inch (720 twips, 48px) of a first-level list
+    const indentOf = (list) => Math.max(0, Number.isFinite(list.left) ? Math.round((list.left - 720) / 15) : list.ilvl * 40);
+    const blank = (p) => !p.list && !p.pageBreaks && !/<img/i.test(p.inner) && !p.inner.replace(/<[^>]*>|\s|&nbsp;|\u00a0/g, '');
+
     async function body(container) {
       let html = '';
-      const stack = []; // open lists: {kind}
+      const stack = []; // open lists: { kind, ilvl, numId }
       const closeTo = (depth) => {
         while (stack.length > depth) html += '</li></' + stack.pop().kind + '>';
       };
@@ -679,34 +714,52 @@
         }
       };
       collect(container);
+      const items = [];
       for (const c of blocks) {
-        if (c.localName === 'p') {
-          const p = await paragraph(c);
-          const style = p.align && p.align !== 'left' ? ' style="text-align: ' + p.align + ';"' : '';
-          const content = p.inner || '<br>';
-          if (p.list) {
-            const depth = p.list.ilvl + 1;
-            if (stack.length > depth) closeTo(depth);
-            if (stack.length === depth && stack[depth - 1].kind !== p.list.kind) closeTo(depth - 1);
-            if (stack.length === depth) html += '</li><li>';
-            while (stack.length < depth) {
-              html += '<' + p.list.kind + '><li>';
-              stack.push({ kind: p.list.kind });
-            }
-            html += content;
-          } else if (p.tag === 'pre' && html.endsWith('</pre>')) {
-            // consecutive code paragraphs are one code block
-            html = html.slice(0, -6) + '\n' + p.inner.replace(/<br>/g, '\n') + '</pre>';
-          } else {
-            closeTo(0);
-            const inner = p.tag === 'pre' ? p.inner.replace(/<\/?code>/g, '').replace(/<br>/g, '\n') : content;
-            html += '<' + p.tag + style + '>' + inner + '</' + p.tag + '>';
-          }
-          for (let i = 0; i < p.pageBreaks; i++) { closeTo(0); html += '<hr class="page-break">'; }
-        } else if (c.localName === 'tbl') {
-          closeTo(0);
-          html += await table(c);
+        if (c.localName === 'p') items.push({ p: await paragraph(c) });
+        else if (c.localName === 'tbl') items.push({ table: c });
+      }
+      const listNext = (i) => {
+        for (let j = i + 1; j < items.length; j++) {
+          if (items[j].p && blank(items[j].p)) continue;
+          return !!(items[j].p && items[j].p.list);
         }
+        return false;
+      };
+      for (const [i, item] of items.entries()) {
+        if (item.table) {
+          closeTo(0);
+          html += await table(item.table);
+          continue;
+        }
+        const p = item.p;
+        const style = p.align && p.align !== 'left' ? ' style="text-align: ' + p.align + ';"' : '';
+        const content = p.inner || '<br>';
+        if (p.list) {
+          const n = p.list.kind === 'ol' ? numberOf(p.list) : 1;
+          while (stack.length && stack[stack.length - 1].ilvl > p.list.ilvl) closeTo(stack.length - 1);
+          const top = stack[stack.length - 1];
+          if (top && top.ilvl === p.list.ilvl && (top.kind !== p.list.kind || top.numId !== p.list.numId)) closeTo(stack.length - 1);
+          if (stack.length && stack[stack.length - 1].ilvl === p.list.ilvl) html += '</li><li>';
+          else {
+            const attrs = (p.list.kind === 'ol' && n !== 1 ? ' start="' + n + '"' : '') +
+              (p.list.kind === 'ol' && p.list.type !== '1' ? ' type="' + p.list.type + '"' : '') +
+              (!stack.length && indentOf(p.list) ? ' style="margin-left: ' + indentOf(p.list) + 'px;"' : '');
+            html += '<' + p.list.kind + attrs + '><li>';
+            stack.push({ kind: p.list.kind, ilvl: p.list.ilvl, numId: p.list.numId });
+          }
+          html += content;
+        } else if (stack.length && blank(p) && listNext(i)) {
+          // an empty line between a list's items
+        } else if (p.tag === 'pre' && html.endsWith('</pre>')) {
+          // consecutive code paragraphs are one code block
+          html = html.slice(0, -6) + '\n' + p.inner.replace(/<br>/g, '\n') + '</pre>';
+        } else {
+          closeTo(0);
+          const inner = p.tag === 'pre' ? p.inner.replace(/<\/?code>/g, '').replace(/<br>/g, '\n') : content;
+          html += '<' + p.tag + style + '>' + inner + '</' + p.tag + '>';
+        }
+        for (let k = 0; k < p.pageBreaks; k++) { closeTo(0); html += '<hr class="page-break">'; }
       }
       closeTo(0);
       return html;
