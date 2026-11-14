@@ -23,7 +23,7 @@
   NpI18n.dom(document.body);
 
   // Shown in Tools → About, so it is easy to tell which version is running.
-  const APP_VERSION = '2026.11.13-61';
+  const APP_VERSION = '2026.11.14-62';
 
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -749,7 +749,40 @@
     return addRecord(doc);
   }
 
-  async function createDoc(html = '', title = '', opts = {}) {
+  // Documents are made one at a time: two at once would each find the other's
+  // blank page current and leave it behind. A New pressed while a blank
+  // document is still being made (a second click, or a space typed on the
+  // still-focused button) is that same document. Keys typed meanwhile, which
+  // would land on the button and be lost, are kept and typed into it.
+  let creating = Promise.resolve();
+  let blankInFlight = null;
+  let typedAhead = null; // keys typed while a new document opens, or null
+  function createDoc(html = '', title = '', opts = {}) {
+    const blank = !html && !title;
+    if (blank && blankInFlight) return blankInFlight;
+    if (blank && !opts.keepFocus) {
+      // until it opens, keys typed are held for it, not put in the page it leaves
+      typedAhead = '';
+      if (document.activeElement === editor) editor.blur();
+    }
+    const made = creating.then(() => makeDoc(html, title, opts));
+    creating = made.catch(() => {});
+    // nothing made (storage refused it): keys go where they are typed again
+    made.then((doc) => { if (!doc) typedAhead = null; }, () => { typedAhead = null; });
+    if (blank) {
+      blankInFlight = made;
+      made.finally(() => { if (blankInFlight === made) blankInFlight = null; });
+    }
+    return made;
+  }
+  document.addEventListener('keydown', (e) => {
+    if (typedAhead == null || e.target === editor || e.isComposing) return;
+    if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    typedAhead += e.key;
+  }, true);
+
+  async function makeDoc(html, title, opts) {
     if (current && dirty) await saveNow();
     await dropBlankCurrent();
     const doc = newDocRecord(html, title);
@@ -761,7 +794,13 @@
     try { await NpStore.putDoc(doc); } catch (e) { toast(_('Could not create the document: {reason}', { reason: e.message })); return null; }
     docs.unshift(doc);
     await openDoc(doc.id, { force: true });
-    if (!opts.keepFocus) setTimeout(placeCaretAtStart, 0);
+    if (!opts.keepFocus) {
+      // the keys typed while it opened go in now, before any typed after
+      const keys = typedAhead;
+      typedAhead = null;
+      if (document.activeElement !== editor) placeCaretAtStart();
+      if (keys && current === doc) document.execCommand('insertText', false, keys);
+    }
     return doc;
   }
 

@@ -94,9 +94,9 @@ it, and so does Noteshack).
 
 1. Later, only if asked: translation with your own key (DeepL, Google…); a
    Buy Me a Coffee link.
-2. Flaky tests: `editor.spec` once found 4 documents instead of 3 (not
-   reproduced in 30 runs; it now prints the names if it happens again);
-   reading a scan in WebKit once found no text.
+2. Reading a scan in WebKit once found no text (not seen again). A test
+   that fails has a cause: find it (the "4 documents instead of 3" failure
+   was a real bug, typing straight after New, found by slowing the CPU).
 3. The app's translations have not been checked by native speakers, and
    none are available.
 4. Safari: Backspace or Ctrl+Z right after a Markdown shortcut does not put

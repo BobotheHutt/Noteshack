@@ -150,9 +150,12 @@ test('saving, reloading, exporting and a second document', async ({ app: p }) =>
   await expect(p.locator('#doc-title')).toHaveValue('Kept copy');
   await expect(p.locator('#editor h1')).toHaveText('Kept');
   await expect(p.locator('#editor')).toContainText('This survives a reload.');
+  // typing straight after New, while the document is still being made: the
+  // keys go into it, in order (a space no longer presses New again, which
+  // made a document too many and lost what was typed)
   await p.click('.sb-head [data-action="new"]');
   await p.keyboard.type('Second doc');
-  // (named, so that if a document too many ever turns up, which one shows)
+  await expect(p.locator('#editor')).toHaveText('Second doc');
   await expect.poll(() => p.locator('.doc-item').allTextContents(), { timeout: 10000 }).toHaveLength(3);
 });
 
